@@ -120,7 +120,7 @@ def main():
     OUTPUT_DIR = "ad_lora_clip_output" # Changed output dir name
     
     BATCH_SIZE = 4
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 20
     LEARNING_RATE = 1e-4 # Standard LR for LoRA
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -166,7 +166,7 @@ def main():
     # 4. Dataloader
     dataset = AdImageNetDataset(DATASET_PATH, JSON_PATH, tokenizer)
     # use 10% of dataset for quick testing
-    dataset = torch.utils.data.Subset(dataset, list(range(int(0.01 * len(dataset)))))
+    # dataset = torch.utils.data.Subset(dataset, list(range(int(0.01 * len(dataset)))))
     train_dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
     # 5. Optimizer
