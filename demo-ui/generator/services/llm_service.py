@@ -330,31 +330,79 @@ class LLMService:
                 "color": "white"
             }
     
+    def _try_load_model(self, model_name, allow_download=False):
+        """
+        尝试加载模型，优先使用 CUDA GPU，失败则回退到 CPU
+        
+        Returns:
+            GPT4All model instance or None if failed
+        """
+        # 检查可用的 GPU 设备（用于调试）
+        try:
+            available_gpus = GPT4All.list_gpus()
+            if available_gpus:
+                print(f"检测到可用 GPU 设备: {available_gpus}")
+            else:
+                print("未检测到可用 GPU 设备")
+        except Exception as e:
+            print(f"无法检测 GPU 设备: {e}")
+        
+        # 优先尝试使用 CUDA GPU
+        print("尝试使用 CUDA GPU 加载模型...")
+        try:
+            model = GPT4All(
+                model_name,
+                allow_download=allow_download,
+                device="cuda"  # 使用 CUDA GPU
+            )
+            print("✓ 成功使用 CUDA GPU 加载模型")
+            return model
+        except Exception as gpu_error:
+            error_msg = str(gpu_error).lower()
+            # 检查是否是 GPU 相关的错误（内存不足、CUDA 不可用等）
+            if "cuda" in error_msg or "gpu" in error_msg or "memory" in error_msg or "device" in error_msg:
+                print(f"⚠ CUDA GPU 加载失败: {gpu_error}")
+                print("回退到 CPU 模式...")
+            else:
+                # 其他错误也回退到 CPU 试试
+                print(f"⚠ 加载失败: {gpu_error}")
+                print("尝试回退到 CPU 模式...")
+        
+        # 回退到 CPU
+        try:
+            model = GPT4All(
+                model_name,
+                allow_download=allow_download,
+                device="cpu"  # 明确指定使用 CPU
+            )
+            print("✓ 成功使用 CPU 加载模型")
+            return model
+        except Exception as cpu_error:
+            print(f"✗ CPU 加载也失败: {cpu_error}")
+            return None
+    
     def _initialize_model(self):
-        """Initialize GPT4All model, auto-download if not found"""
+        """Initialize GPT4All model with CUDA GPU priority, fallback to CPU if unavailable"""
         try:
             print(f"Attempting to load model: {self.model_name}")
             
             # Try to load from path if it exists
             if os.path.exists(self.model_name):
                 print(f"Loading model from path: {self.model_name}")
-                try:
-                    self.model = GPT4All(self.model_name, allow_download=False)
-                    print(f"✓ Successfully loaded model: {self.model_name}")
+                self.model = self._try_load_model(self.model_name, allow_download=False)
+                if self.model:
                     return
-                except Exception as e:
-                    print(f"✗ Failed to load from path: {e}")
+                else:
+                    raise Exception("Failed to load model from path")
             
             # If path doesn't exist, try to load by name (will auto-download if not found)
             print(f"Model path not found, attempting to load by name: {self.model_name}")
             print("If model is not found locally, it will be downloaded automatically...")
-            try:
-                self.model = GPT4All(self.model_name, allow_download=True)
-                print(f"✓ Successfully loaded/downloaded model: {self.model_name}")
+            self.model = self._try_load_model(self.model_name, allow_download=True)
+            if self.model:
                 return
-            except Exception as e:
-                print(f"✗ Failed to load/download model: {e}")
-                raise
+            else:
+                raise Exception("Failed to load/download model by name")
                 
         except Exception as e:
             print(f"✗ Model initialization failed: {e}")
