@@ -6,13 +6,13 @@ import numpy as np
 
 # SD & Hugging Face Components
 from transformers import CLIPTokenizer
-from clip_tokenizer import CLIPTextModel
+from adstyler_src.clip_tokenizer import CLIPTextModel
 from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from peft import PeftModel
 
 # Custom Modules (From your files)
-from infer import StableDiffusionPipelineWithStyle, StyleTokenizer, load_style_encoder
+from adstyler_src.infer import StableDiffusionPipelineWithStyle, StyleTokenizer, load_style_encoder
 import random
 import json
 

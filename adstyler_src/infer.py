@@ -29,7 +29,7 @@ from diffusers import DiffusionPipeline
 from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 
-from clip_tokenizer import CLIPTextModel
+from adstyler_src.clip_tokenizer import CLIPTextModel
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

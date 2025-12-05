@@ -60,7 +60,7 @@ def generate_image(request):
         text_layout = ad_info.get('text_layout', None)
         
         # Generate image using diffusion model with text overlay
-        image, image_url = diffusion_service.generate_image_from_prompt(
+        image_url = diffusion_service.generate_image_from_prompt(
             processed_prompt,
             ad_copy=ad_copy,
             text_layout=text_layout
