@@ -67,18 +67,23 @@ class LLMService:
         self._initialize_model()
         
         # Initialize layout generation method
-        if HAS_DJANGO:
-            self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')
-        else:
-            self.layout_method = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
+        # if HAS_DJANGO:
+        #     self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')
+        # else:
+        #     self.layout_method = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
         
-        print(f"Layout generation method configured: {self.layout_method}")
+        # print(f"Layout generation method configured: {self.layout_method}")
         
         self.layout_llm_model = None
         self.layout_llm_tokenizer = None
         self.layout_model = None
         self.layout_thresholds = None
         self.train_layouts = None
+        
+        #TODO: change
+        self.layout_method = 'llm'
+        print(f"Layout generation method configured: {self.layout_method}")
+        
         
         if self.layout_method == 'llm':
             print("Initializing layout LLM...")

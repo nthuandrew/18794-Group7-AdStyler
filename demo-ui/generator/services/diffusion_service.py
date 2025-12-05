@@ -115,14 +115,11 @@ class DiffusionService:
         Returns:
             Tuple of (image object, saved path)
         """
-        # AD_COPY = "An headphone is 50 percent off today!"
-        # METADATA = [0.1, 0.1, 0.8, 0.2] # x, y, width, height
         metadata = []
         metadata.append(text_layout["x"])
         metadata.append(text_layout["y"])
         metadata.append(text_layout["width"])
         metadata.append(text_layout["height"])
-        # STYLE = "Architectural sketch 1" 
 
         media_dir = settings.MEDIA_ROOT
         os.makedirs(media_dir, exist_ok=True)
