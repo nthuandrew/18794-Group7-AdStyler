@@ -68,8 +68,7 @@ class LLMService:
         """
         # Initialize GPT4All model
         self.model = None
-        # self.model_name = model_name or os.getenv('GPT4ALL_MODEL', 'DeepSeek-R1-Distill-Qwen-7B')
-        self.model_name ='DeepSeek-R1-Distill-Qwen-7B'
+        self.model_name = model_name or os.getenv('GPT4ALL_MODEL', 'DeepSeek-R1-Distill-Qwen-7B')
         self._initialize_model()
         
         self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')

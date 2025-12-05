@@ -121,10 +121,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # GPT4All模型配置
-# 建议使用完整路径以避免自动下载
-# 如果设置为模型名称，程序会先在本地路径查找，找不到才会下载
-GPT4ALL_MODEL_NAME = os.getenv('GPT4ALL_MODEL', 
-    '/Users/phi/Library/Application Support/nomic.ai/GPT4All/DeepSeek-R1-Distill-Qwen-7B-Q4_0.gguf')
+# 模型文件位于 demo-ui/model/ 目录下
+# 方法1：使用本地模型文件的完整路径（推荐，避免自动下载）
+MODEL_FILE_PATH = BASE_DIR / 'model' / 'DeepSeek-R1-Distill-Qwen-7B-Q4_0.gguf'
+GPT4ALL_MODEL_NAME = os.getenv('GPT4ALL_MODEL_NAME', str(MODEL_FILE_PATH))
+# 方法2：如果模型文件不在本地，可以使用模型名称（GPT4All会自动下载）
+# GPT4ALL_MODEL_NAME = 'DeepSeek-R1-Distill-Qwen-7B'
+# 方法3：使用完整绝对路径
+# GPT4ALL_MODEL_NAME = '/path/to/your/model.gguf'
 
 # Layout生成方式配置
 # 可选值: "llm" (使用finetuned layout LLM) 或 "sample" (从训练数据随机采样)
