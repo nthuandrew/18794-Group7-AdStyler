@@ -18,13 +18,7 @@ LAYOUT_LLM_DIR = BASE_DIR / 'layout-llm-finetuning'
 FINETUNE_DIR = LAYOUT_LLM_DIR / 'finetune_layout_llm'
 TRAIN_DIST_DIR = LAYOUT_LLM_DIR / 'train_layout_distribution'
 
-# Debug: Print path information
-print(f"Debug path calculation:")
-print(f"  __file__: {__file__}")
-print(f"  BASE_DIR: {BASE_DIR}")
-print(f"  LAYOUT_LLM_DIR: {LAYOUT_LLM_DIR} (exists: {LAYOUT_LLM_DIR.exists()})")
-print(f"  FINETUNE_DIR: {FINETUNE_DIR} (exists: {FINETUNE_DIR.exists()})")
-print(f"  TRAIN_DIST_DIR: {TRAIN_DIST_DIR} (exists: {TRAIN_DIST_DIR.exists()})")
+# Setup paths for layout-llm-finetuning imports
 
 if LAYOUT_LLM_DIR.exists():
     # Add directories to path in correct order
@@ -34,10 +28,7 @@ if LAYOUT_LLM_DIR.exists():
         sys.path.insert(0, str(TRAIN_DIST_DIR))
     sys.path.insert(0, str(LAYOUT_LLM_DIR))
     
-    print(f"Added to Python path:")
-    print(f"  - {FINETUNE_DIR}")
-    print(f"  - {TRAIN_DIST_DIR}")
-    print(f"  - {LAYOUT_LLM_DIR}")
+    # Paths added to sys.path for imports
 else:
     print(f"Warning: layout-llm-finetuning directory not found at: {LAYOUT_LLM_DIR}")
 
@@ -53,6 +44,20 @@ except ImportError:
 class LLMService:
     """Process user input using GPT4All to generate ad information JSON"""
     
+    # Allowed styles list (defined as class constant to avoid duplication)
+    STYLE_LIST = [
+        "Traditional culture 1",
+        "Impressionism",
+        "hand drawn style",
+        "Game scene picture 2",
+        "graphic portrait style",
+        "Op style",
+        "Traditional Chinese ink painting style 2",
+        "National characteristic art 1",
+        "Architectural sketch 1",
+        "Pulp noir style"
+    ]
+    
     def __init__(self, model_name: str = None):
         """
         Initialize LLM service
@@ -66,23 +71,14 @@ class LLMService:
         self.model_name = model_name or os.getenv('GPT4ALL_MODEL', 'DeepSeek-R1-Distill-Qwen-7B')
         self._initialize_model()
         
-        # Initialize layout generation method
-        # if HAS_DJANGO:
-        #     self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')
-        # else:
-        #     self.layout_method = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
-        
-        # print(f"Layout generation method configured: {self.layout_method}")
-        
+        self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')
+        print(f"Layout generation method configured: {self.layout_method}")
+
         self.layout_llm_model = None
         self.layout_llm_tokenizer = None
         self.layout_model = None
         self.layout_thresholds = None
         self.train_layouts = None
-        
-        #TODO: change
-        self.layout_method = 'llm'
-        print(f"Layout generation method configured: {self.layout_method}")
         
         if self.layout_method == 'llm':
             print("Initializing layout LLM...")
@@ -300,6 +296,40 @@ class LLMService:
             print(f"Layout LLM generation failed: {e}")
             return None
     
+    def _validate_and_fix_style(self, style_value: str) -> str:
+        """Validate style and return correct style from allowed list, or original if not found"""
+        style_value = str(style_value).strip()
+        for allowed_style in self.STYLE_LIST:
+            if style_value.lower() == allowed_style.lower():
+                return allowed_style
+        # Return original style value if not found in allowed list
+        print(f"Warning: Style '{style_value}' not in allowed list, using original value")
+        return style_value
+    
+    def _generate_text_layout(self, ad_copy: str = None) -> Dict:
+        """Generate text_layout using configured method"""
+        if self.layout_method == 'llm':
+            if self.layout_llm_model is None:
+                print("Warning: Layout LLM model not loaded, falling back to sampling")
+                return self._sample_layout_from_training_data()
+            else:
+                layout = self._generate_layout_with_llm(ad_copy or "")
+                if layout:
+                    return layout
+                return self._sample_layout_from_training_data()
+        elif self.layout_method == 'sample':
+            return self._sample_layout_from_training_data()
+        else:
+            # Fallback to default
+            return {
+                "x": 0.1,
+                "y": 0.1,
+                "width": 0.5,
+                "height": 0.5,
+                "alignment": "left",
+                "color": "white"
+            }
+    
     def _initialize_model(self):
         """Initialize GPT4All model"""
         try:
@@ -341,34 +371,12 @@ class LLMService:
         Returns:
             Dictionary containing ad information
         """
-        # Define allowed styles
-        STYLE_LIST = [
-            "Traditional culture 1",
-            "Impressionism",
-            "hand drawn style",
-            "Game scene picture 2",
-            "graphic portrait style",
-            "Op style",
-            "Traditional Chinese ink painting style 2",
-            "National characteristic art 1",
-            "Architectural sketch 1",
-            "Pulp noir style"
-        ]
-        
         # Default JSON structure
-        # If target_style is provided and in the list, use it; otherwise use first style as default
+        # If target_style is provided, use it (or original value if not in list); otherwise use first style as default
         if target_style:
-            # Check if target_style is in allowed list
-            style_found = False
-            for allowed_style in STYLE_LIST:
-                if target_style.lower() == allowed_style.lower():
-                    style_text = allowed_style
-                    style_found = True
-                    break
-            if not style_found:
-                style_text = STYLE_LIST[0]
+            style_text = self._validate_and_fix_style(target_style)
         else:
-            style_text = STYLE_LIST[0]  # Default to first style
+            style_text = self.STYLE_LIST[0]  # Default to first style when no target_style provided
         
         default_json = {
             "ad_description": f"{user_text}, {style_text}, high quality, detailed",
@@ -395,21 +403,7 @@ class LLMService:
         else:
             style_instruction = "\nPlease automatically select an appropriate ad style based on the user input."
         
-        # Define allowed styles
-        STYLE_LIST = [
-            "Traditional culture 1",
-            "Impressionism",
-            "hand drawn style",
-            "Game scene picture 2",
-            "graphic portrait style",
-            "Op style",
-            "Traditional Chinese ink painting style 2",
-            "National characteristic art 1",
-            "Architectural sketch 1",
-            "Pulp noir style"
-        ]
-        
-        style_list_str = "\n".join([f"  - {style}" for style in STYLE_LIST])
+        style_list_str = "\n".join([f"  - {style}" for style in self.STYLE_LIST])
         
         system_prompt = f"""You are a professional ad design assistant. Generate a JSON object directly without any thinking process or explanation.
 
@@ -439,6 +433,15 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
         try:
             # Generate response using GPT4All
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            
+            # Print prompt for debugging
+            print("=" * 80)
+            print("DeepSeek Prompt:")
+            print("=" * 80)
+            print(full_prompt)
+            print("=" * 80)
+            print("\nGenerating response with DeepSeek (this may take a while)...\n")
+            
             response = self.model.generate(
                 full_prompt,
                 max_tokens=2500,  # Increased to allow longer reasoning chain and ensure completion
@@ -451,19 +454,80 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
             # Clean response text, try to extract JSON
             response = response.strip()
             
-            # Print full response for debugging
-            print(f"LLM full response: {response}")
+            # Print full response including thinking process
+            print("=" * 80)
+            print("DeepSeek Full Response (including thinking process):")
+            print("=" * 80)
+            print(response)
+            print("=" * 80)
+            print(f"\nResponse length: {len(response)} characters\n")
             
-            # Try to extract JSON from response - use more precise regex
-            # First try to match complete JSON (from first { to last })
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
+            # Remove thinking process (DeepSeek-R1 format: <think>...</think>)
+            # Extract only the final output, ignoring reasoning
+            final_output = response
+            
+            # Try to remove <think>...</think> tags and their content
+            think_pattern = r'<think>.*?</think>'
+            final_output = re.sub(think_pattern, '', final_output, flags=re.DOTALL | re.IGNORECASE)
+            
+            # Clean up extra whitespace
+            final_output = final_output.strip()
+            
+            # Print the cleaned output (without thinking process)
+            if final_output != response:
+                print("=" * 80)
+                print("Final Output (thinking process removed):")
+                print("=" * 80)
+                print(final_output)
+                print("=" * 80)
+                print(f"\nFinal output length: {len(final_output)} characters\n")
+            
+            # Try to extract JSON from final output
+            # Strategy: Find the LAST complete JSON object (DeepSeek often outputs multiple)
+            json_str = None
+            
+            # Method 1: Find all JSON objects and take the last one
+            # This handles cases where DeepSeek outputs JSON in thinking process and final output
+            json_objects = []
+            brace_count = 0
+            start_pos = -1
+            
+            for i, char in enumerate(final_output):
+                if char == '{':
+                    if brace_count == 0:
+                        start_pos = i  # Start of a new JSON object
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0 and start_pos != -1:
+                        # Found a complete JSON object
+                        json_candidate = final_output[start_pos:i+1]
+                        json_objects.append(json_candidate)
+                        start_pos = -1
+            
+            # Use the last JSON object found (most likely the final output)
+            if json_objects:
+                json_str = json_objects[-1]
+                print(f"✓ Found {len(json_objects)} JSON object(s), using the last one")
+                if len(json_objects) > 1:
+                    print(f"  First JSON (length): {len(json_objects[0])} chars")
+                    print(f"  Last JSON (length): {len(json_str)} chars")
+            
+            # Method 2: Fallback to regex if method 1 didn't work
+            if not json_str:
+                print("⚠ Method 1 failed, trying regex fallback...")
+                json_match = re.search(r'\{.*\}', final_output, re.DOTALL)
                 
-                # If JSON looks incomplete (doesn't end with }), try to fix
-                if not json_str.rstrip().endswith('}'):
-                    # Try to find last complete structure
-                    # Calculate brace balance
+                # If not found in cleaned output, try original response
+                if not json_match:
+                    print("⚠ No JSON found in cleaned output, trying original response...")
+                    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                
+                if json_match:
+                    json_str = json_match.group(0)
+                    
+                    # Try to extract the last complete JSON from the match
+                    # (in case it contains multiple JSONs)
                     brace_count = 0
                     last_valid_pos = -1
                     for i, char in enumerate(json_str):
@@ -476,9 +540,23 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
                     
                     if last_valid_pos > 0:
                         json_str = json_str[:last_valid_pos + 1]
-                    else:
-                        # If can't fix, try to manually complete
-                        json_str = json_str.rstrip().rstrip(',') + '}'
+            
+            if json_str:
+                # Clean up the JSON string
+                json_str = json_str.strip()
+                
+                # Remove any trailing text after the closing brace
+                # Find the last } and truncate there
+                last_brace = json_str.rfind('}')
+                if last_brace != -1:
+                    json_str = json_str[:last_brace + 1]
+                
+                # Print the extracted JSON for debugging
+                print("=" * 80)
+                print("Extracted JSON string:")
+                print("=" * 80)
+                print(json_str)
+                print("=" * 80)
                 
                 try:
                     ad_info = json.loads(json_str)
@@ -490,55 +568,11 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
                         if 'Please automatically' in ad_copy_value or 'based on the user input' in ad_copy_value or ad_copy_value == user_text:
                             ad_info['ad_copy'] = default_json['ad_copy']
                         
-                        # Validate and fix style: must be one of the allowed styles
-                        STYLE_LIST = [
-                            "Traditional culture 1",
-                            "Impressionism",
-                            "hand drawn style",
-                            "Game scene picture 2",
-                            "graphic portrait style",
-                            "Op style",
-                            "Traditional Chinese ink painting style 2",
-                            "National characteristic art 1",
-                            "Architectural sketch 1",
-                            "Pulp noir style"
-                        ]
+                        # Validate and fix style
+                        ad_info['style'] = self._validate_and_fix_style(ad_info.get('style', ''))
                         
-                        style_value = str(ad_info.get('style', '')).strip()
-                        # Check if style is in the allowed list (case-insensitive)
-                        style_found = False
-                        for allowed_style in STYLE_LIST:
-                            if style_value.lower() == allowed_style.lower():
-                                ad_info['style'] = allowed_style  # Use exact case from list
-                                style_found = True
-                                break
-                        
-                        if not style_found:
-                            # If style is not in the list, try to find the closest match or use default
-                            print(f"Warning: Style '{style_value}' not in allowed list, selecting default")
-                            # Default to first style as fallback
-                            ad_info['style'] = STYLE_LIST[0]
-                        
-                        # Generate text_layout using selected method
-                        text_layout = None
-                        if self.layout_method == 'llm':
-                            print(f"Generating text_layout using finetuned LLM (method: {self.layout_method})...")
-                            if self.layout_llm_model is None:
-                                print("Warning: Layout LLM model not loaded, falling back to sampling")
-                                text_layout = self._sample_layout_from_training_data()
-                            else:
-                                text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
-                        elif self.layout_method == 'sample':
-                            print(f"Sampling text_layout from training data (method: {self.layout_method})...")
-                            text_layout = self._sample_layout_from_training_data()
-                        
-                        if text_layout is None:
-                            # Final fallback to default
-                            print("Using default text_layout")
-                            text_layout = default_json['text_layout']
-                        
-                        # Add text_layout to result
-                        ad_info['text_layout'] = text_layout
+                        # Generate text_layout
+                        ad_info['text_layout'] = self._generate_text_layout(ad_info.get('ad_copy', user_text))
 
                         return ad_info
                     else:
@@ -549,85 +583,52 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
                                 if key == 'ad_copy':
                                     ad_info[key] = default_json['ad_copy']
                                 elif key == 'style':
-                                    # Ensure style is from allowed list
-                                    ad_info[key] = STYLE_LIST[0]
+                                    # Use default style only if style field is completely missing
+                                    ad_info[key] = self.STYLE_LIST[0]
                                 elif key in default_json:
                                     ad_info[key] = default_json[key]
                         
-                        # Validate style again after completion
-                        style_value = str(ad_info.get('style', '')).strip()
-                        style_found = False
-                        for allowed_style in STYLE_LIST:
-                            if style_value.lower() == allowed_style.lower():
-                                ad_info['style'] = allowed_style
-                                style_found = True
-                                break
-                        if not style_found:
-                            ad_info['style'] = STYLE_LIST[0]
-                        
-                        # Generate text_layout
-                        text_layout = None
-                        if self.layout_method == 'llm':
-                            if self.layout_llm_model is None:
-                                print("Warning: Layout LLM model not loaded, falling back to sampling")
-                                text_layout = self._sample_layout_from_training_data()
-                            else:
-                                text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
-                        elif self.layout_method == 'sample':
-                            text_layout = self._sample_layout_from_training_data()
-                        
-                        if text_layout is None:
-                            text_layout = default_json['text_layout']
-                        
-                        ad_info['text_layout'] = text_layout
+                        # Validate style and generate text_layout
+                        ad_info['style'] = self._validate_and_fix_style(ad_info.get('style', ''))
+                        ad_info['text_layout'] = self._generate_text_layout(ad_info.get('ad_copy', user_text))
                         
                         # Validate again
                         if all(key in ad_info for key in required_keys + ['text_layout']):
                             return ad_info
                 except json.JSONDecodeError as e:
-                    print(f"JSON parsing error: {e}")
-                    print(f"Attempted JSON string (first 300 chars): {json_str[:300]}")
+                    print("=" * 80)
+                    print(f"⚠ JSON parsing error: {e}")
+                    print("=" * 80)
+                    print(f"Attempted JSON string (first 500 chars):\n{json_str[:500]}")
+                    if len(json_str) > 500:
+                        print(f"... (truncated, total JSON length: {len(json_str)} characters)")
+                    print("=" * 80)
             
             # If parsing fails, return default JSON with generated layout
-            print(f"LLM response parsing failed, using default. Response content (first 500 chars): {response[:500]}")
+            print("=" * 80)
+            print("⚠ LLM response parsing failed, using default JSON")
+            print("=" * 80)
+            print(f"Final output (thinking process removed, first 1000 chars):\n{final_output[:1000]}")
+            if len(final_output) > 1000:
+                print(f"... (truncated, total length: {len(final_output)} characters)")
+            print("=" * 80)
             
             # Still try to generate layout even if LLM failed
-            text_layout = None
-            if self.layout_method == 'llm':
-                if self.layout_llm_model is None:
-                    print("Warning: Layout LLM model not loaded, falling back to sampling")
-                    text_layout = self._sample_layout_from_training_data()
-                else:
-                    text_layout = self._generate_layout_with_llm(user_text)
-            elif self.layout_method == 'sample':
-                text_layout = self._sample_layout_from_training_data()
-            
-            if text_layout is None:
-                text_layout = default_json['text_layout']
-            
-            default_json['text_layout'] = text_layout
+            default_json['text_layout'] = self._generate_text_layout(user_text)
             return default_json
             
         except Exception as e:
-            print(f"LLM processing error: {e}")
+            print("=" * 80)
+            print(f"✗ LLM processing error: {e}")
+            print("=" * 80)
+            import traceback
+            traceback.print_exc()
+            print("=" * 80)
             # Return default JSON on error, but still generate layout
-            text_layout = None
-            if self.layout_method == 'llm':
-                if self.layout_llm_model is None:
-                    print("Warning: Layout LLM model not loaded, falling back to sampling")
-                    text_layout = self._sample_layout_from_training_data()
-                else:
-                    try:
-                        text_layout = self._generate_layout_with_llm(user_text)
-                    except Exception as layout_error:
-                        print(f"Layout LLM generation error: {layout_error}")
-                        text_layout = self._sample_layout_from_training_data()
-            elif self.layout_method == 'sample':
-                text_layout = self._sample_layout_from_training_data()
-            
-            if text_layout is None:
-                text_layout = default_json['text_layout']
-            
-            default_json['text_layout'] = text_layout
+            try:
+                default_json['text_layout'] = self._generate_text_layout(user_text)
+            except Exception as layout_error:
+                print(f"Layout generation error: {layout_error}")
+                # Use default layout from default_json
             return default_json
 

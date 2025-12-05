@@ -5,9 +5,23 @@ from PIL import Image
 import io
 import random
 import os
+import sys
+from pathlib import Path
 from typing import Dict, Optional
 from django.conf import settings
-from adstyler_src.test_adstyler import run_adstyler_inference
+
+# Add project root to path for adstyler_src imports
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+ADSTYLER_SRC_DIR = BASE_DIR / 'adstyler_src'
+if ADSTYLER_SRC_DIR.exists():
+    sys.path.insert(0, str(BASE_DIR))
+
+try:
+    from adstyler_src.test_adstyler import run_adstyler_inference
+except ImportError as e:
+    print(f"Warning: Could not import adstyler_src.test_adstyler: {e}")
+    print(f"Make sure adstyler_src directory is accessible from {BASE_DIR}")
+    run_adstyler_inference = None
 
 
 class DiffusionService:
@@ -105,35 +119,55 @@ class DiffusionService:
         text_layout: Optional[Dict] = None
     ) -> str:
         """
-        Generate image from prompt, optionally add text overlay
+        Generate image using AdStyler model
         
         Args:
-            prompt: Image generation prompt
-            ad_copy: Advertising copy text to overlay on image
+            style: Style name for the ad
+            ad_copy: Advertising copy text
             text_layout: Text layout specification (x, y, width, height, alignment, color)
             
         Returns:
-            Tuple of (image object, saved path)
+            Image URL path
         """
-        metadata = []
-        metadata.append(text_layout["x"])
-        metadata.append(text_layout["y"])
-        metadata.append(text_layout["width"])
-        metadata.append(text_layout["height"])
+        if run_adstyler_inference is None:
+            raise ImportError("AdStyler inference function is not available. Please check adstyler_src imports.")
+        
+        if not text_layout:
+            raise ValueError("text_layout is required for AdStyler image generation")
+        
+        # Extract layout metadata
+        metadata = [
+            text_layout.get("x", 0.1),
+            text_layout.get("y", 0.1),
+            text_layout.get("width", 0.5),
+            text_layout.get("height", 0.5)
+        ]
 
         media_dir = settings.MEDIA_ROOT
         os.makedirs(media_dir, exist_ok=True)
 
-        filename = "output_adstyler.png"
+        # Generate unique filename
+        import hashlib
+        import time
+        filename_hash = hashlib.md5(f"{style}{ad_copy}{time.time()}".encode()).hexdigest()[:8]
+        filename = f"generated_adstyler_{filename_hash}.png"
         output_path = os.path.join(media_dir, filename)
 
-        run_adstyler_inference(
-            ad_copy=ad_copy,
-            layout=metadata,
-            style=style,
-            output_image_path=output_path,
-        )
+        try:
+            print(f"Generating image with AdStyler: style={style}, ad_copy={ad_copy[:50]}...")
+            run_adstyler_inference(
+                ad_copy=ad_copy or "",
+                layout=metadata,
+                style=style,
+                output_image_path=output_path,
+            )
+            print(f"✓ Image generated successfully: {output_path}")
+        except Exception as e:
+            print(f"✗ Error generating image with AdStyler: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
-        # 回傳給前端用的 URL
+        # Return URL for frontend
         image_url = os.path.join(settings.MEDIA_URL, filename)
         return image_url

@@ -113,7 +113,9 @@ class AdStylerCLIPWrapper(nn.Module):
         
         return [final_output]
 def get_ref_image_path_smart(style_name):
-    STYLE_REPRESENTATIVES_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_representatives.json"
+    # Use relative path from the script location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    STYLE_REPRESENTATIVES_PATH = os.path.join(script_dir, "style_representatives.json")
 
     # Load the map once
     if os.path.exists(STYLE_REPRESENTATIVES_PATH):
@@ -133,6 +135,11 @@ def get_ref_image_path_smart(style_name):
             return style_lookup[existing_style]["image_path"]
 
     available_styles = list(style_lookup.keys())
+    if not available_styles:
+        # Fallback: return a default path or raise an error
+        print(f"Error: No styles available in style_representatives.json. Cannot find style '{style_name}'.")
+        raise ValueError(f"No styles available and style '{style_name}' not found. Please check style_representatives.json file.")
+    
     random_style = random.choice(available_styles)
     print(f"Warning: Style '{style_name}' not found. Using random style '{random_style}'.")
     return style_lookup[random_style]["image_path"]
@@ -144,19 +151,23 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
     # Inputs
     AD_COPY = ad_copy
     LAYOUT = layout 
-    STYLE_IMAGE_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/" + get_ref_image_path_smart(style)
+    
+    # Use relative paths from script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    style_image_relative_path = get_ref_image_path_smart(style)
+    STYLE_IMAGE_PATH = os.path.join(script_dir, style_image_relative_path)
     OUTPUT_IMAGE = output_image_path
 
     # Base Models
     BASE_MODEL_ID = "runwayml/stable-diffusion-v1-5"
     
     # 1. Style Components Paths
-    STYLE_ENCODER_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_encoder.pth"
-    STYLE_TOKENIZER_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_tokenizer.pth"
+    STYLE_ENCODER_PATH = os.path.join(script_dir, "style_encoder.pth")
+    STYLE_TOKENIZER_PATH = os.path.join(script_dir, "style_tokenizer.pth")
     
     # 2. Ad Components Paths (CLIP Version)
     # *** Update this to your CLIP training output folder ***
-    AD_CHECKPOINT_DIR = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/ad_lora_clip_output/checkpoint-epoch-20" 
+    AD_CHECKPOINT_DIR = os.path.join(script_dir, "ad_lora_clip_output", "checkpoint-epoch-20")
     UNET_LORA_PATH = os.path.join(AD_CHECKPOINT_DIR, "unet_lora")
     META_PROJECTOR_PATH = os.path.join(AD_CHECKPOINT_DIR, "meta_projector.pth")
 
