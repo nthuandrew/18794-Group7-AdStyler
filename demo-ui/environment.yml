@@ -1,0 +1,12 @@
+name: stylediffusion
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - Django==4.2.7
+    - Pillow==10.1.0
+    - gpt4all==2.5.0
+    - requests==2.31.0
+

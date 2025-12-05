@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI图像生成器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .image-preview {
+            text-align: center;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .image-preview img {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 8px;
+        }
+        
+        .image-preview .placeholder {
+            color: #999;
+            font-size: 1.1em;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message.active {
+            display: block;
+        }
+        
+        .success-message {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .success-message.active {
+            display: block;
+        }
+        
+        .prompt-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .prompt-display h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .prompt-display p {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .json-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+        }
+        
+        .json-display h4 {
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .json-content {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+            width: 100%;
+            max-width: 600px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+            white-space: pre;
+            word-wrap: break-word;
+        }
+        
+        .json-key {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .json-value {
+            color: #333;
+        }
+        
+        .json-value-string {
+            color: #28a745;
+        }
+        
+        .json-value-boolean {
+            color: #ff6b6b;
+        }
+        
+        .json-value-null {
+            color: #999;
+            font-style: italic;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 AI Image Generator</h1>
+            <p>Generate beautiful images using LLM-optimized prompts</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #333;">Input Information</h2>
+                
+                <div class="error-message" id="errorMessage"></div>
+                <div class="success-message" id="successMessage"></div>
+                
+                <form id="generateForm">
+                    <div class="form-group">
+                        <label for="userText">Text Description:</label>
+                        <textarea id="userText" name="user_text" placeholder="e.g., A cute cat sitting on a windowsill" required></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn" id="generateBtn">Generate Image</button>
+                </form>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Processing, please wait...</p>
+                </div>
+                
+                <div class="json-display" id="jsonDisplay" style="display: none;">
+                    <h4>📋 Generated Ad Information (JSON):</h4>
+                    <div class="json-content" id="jsonContent"></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 style="margin-bottom: 20px; color: #333;">Generated Image</h2>
+                <div class="image-preview" id="imagePreview">
+                    <div class="placeholder">Generated image will appear here</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const form = document.getElementById('generateForm');
+        const generateBtn = document.getElementById('generateBtn');
+        const loading = document.getElementById('loading');
+        const imagePreview = document.getElementById('imagePreview');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        const jsonDisplay = document.getElementById('jsonDisplay');
+        const jsonContent = document.getElementById('jsonContent');
+        
+        // Format JSON display
+        function formatJsonDisplay(jsonObj) {
+            if (!jsonObj) return '';
+            
+            // Use JSON.stringify for pretty display
+            const formatted = JSON.stringify(jsonObj, null, 2);
+            
+            // Syntax highlighting
+            let html = formatted
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                    let cls = 'json-value';
+                    if (/^"/.test(match)) {
+                        if (/:$/.test(match)) {
+                            cls = 'json-key';
+                        } else {
+                            cls = 'json-value-string';
+                        }
+                    } else if (/true|false/.test(match)) {
+                        cls = 'json-value-boolean';
+                    } else if (/null/.test(match)) {
+                        cls = 'json-value-null';
+                    }
+                    return '<span class="' + cls + '">' + match + '</span>';
+                });
+            
+            return html;
+        }
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userText = document.getElementById('userText').value.trim();
+            
+            // Reset state
+            errorMessage.classList.remove('active');
+            successMessage.classList.remove('active');
+            jsonDisplay.style.display = 'none';
+            imagePreview.innerHTML = '<div class="placeholder">Generated image will appear here</div>';
+            
+            // Show loading state
+            loading.classList.add('active');
+            generateBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/generate/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_text: userText
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display generated image
+                    imagePreview.innerHTML = `<img src="${data.image_url}" alt="Generated image">`;
+                    
+                    // Display JSON information
+                    if (data.ad_json) {
+                        jsonContent.innerHTML = formatJsonDisplay(data.ad_json);
+                        jsonDisplay.style.display = 'block';
+                    }
+                    
+                    // Show success message
+                    successMessage.textContent = 'Image generated successfully!';
+                    successMessage.classList.add('active');
+                } else {
+                    // Show error message
+                    errorMessage.textContent = data.error || 'Error generating image';
+                    errorMessage.classList.add('active');
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Network error: ' + error.message;
+                errorMessage.classList.add('active');
+            } finally {
+                loading.classList.remove('active');
+                generateBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
+
