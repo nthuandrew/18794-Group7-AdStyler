@@ -156,7 +156,7 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
     
     # 2. Ad Components Paths (CLIP Version)
     # *** Update this to your CLIP training output folder ***
-    AD_CHECKPOINT_DIR = "ad_lora_clip_output/checkpoint-epoch-5" 
+    AD_CHECKPOINT_DIR = "ad_lora_clip_output/checkpoint-epoch-10" 
     UNET_LORA_PATH = os.path.join(AD_CHECKPOINT_DIR, "unet_lora")
     META_PROJECTOR_PATH = os.path.join(AD_CHECKPOINT_DIR, "meta_projector.pth")
 
@@ -256,7 +256,7 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
         prompt=AD_COPY,           
         style_image=style_image,
         guidance_scale=7.5,
-        style_guidance_scale=1, 
+        style_guidance_scale=5, 
         num_inference_steps=30
     )
     
@@ -268,9 +268,9 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
 
 if __name__ == "__main__":
     Style_list = ["Traditional culture 1", "Impressionism", "hand drawn style", "Game scene picture 2", "graphic portrait style", "Op style", "Traditional Chinese ink painting style 2", "National characteristic art 1", "Architectural sketch 1", "Pulp noir style"]
-    AD_COPY = "A smartphone is on sale now!"
+    AD_COPY = "An headphone is 50 percent off today!"
     METADATA = [0.1, 0.1, 0.8, 0.2] 
-    STYLE = "Impressionism" 
+    STYLE = "Architectural sketch 1" 
 
     OUTPUT_IMAGE = "output_adstyler.png"
 
