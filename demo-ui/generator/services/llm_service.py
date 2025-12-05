@@ -84,7 +84,6 @@ class LLMService:
         self.layout_method = 'llm'
         print(f"Layout generation method configured: {self.layout_method}")
         
-        
         if self.layout_method == 'llm':
             print("Initializing layout LLM...")
             self._initialize_layout_llm()
