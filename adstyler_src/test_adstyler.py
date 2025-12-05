@@ -111,10 +111,16 @@ class AdStylerCLIPWrapper(nn.Module):
         
         return [final_output]
 
-def run_adstyler_inference():
+def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 0.1, 0.8, 0.2], style_image_path="style30k/images_top10/s0546____0908_01_query_1_img_000098_1682331370726_08680369659788782.jpeg.jpg", output_image_path="output_adstyler.png"):
     # --- Configuration ---
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {DEVICE}")
+    
+    # Inputs
+    AD_COPY = ad_copy
+    LAYOUT = layout 
+    STYLE_IMAGE_PATH = style_image_path
+    OUTPUT_IMAGE = output_image_path
 
     # Base Models
     BASE_MODEL_ID = "runwayml/stable-diffusion-v1-5"
@@ -122,7 +128,6 @@ def run_adstyler_inference():
     # 1. Style Components Paths
     STYLE_ENCODER_PATH = "style_encoder.pth"
     STYLE_TOKENIZER_PATH = "style_tokenizer.pth"
-    STYLE_IMAGE_PATH = "style30k/images_top10/s0546____0908_01_query_1_img_000098_1682331370726_08680369659788782.jpeg.jpg"
     
     # 2. Ad Components Paths (CLIP Version)
     # *** Update this to your CLIP training output folder ***
@@ -130,11 +135,6 @@ def run_adstyler_inference():
     UNET_LORA_PATH = os.path.join(AD_CHECKPOINT_DIR, "unet_lora")
     META_PROJECTOR_PATH = os.path.join(AD_CHECKPOINT_DIR, "meta_projector.pth")
 
-    # 3. Inputs
-    AD_COPY = "A smartphone is on sale now!"
-    LAYOUT = [0.1, 0.1, 0.8, 0.2] 
-    
-    OUTPUT_IMAGE = "output_adstyler.png"
 
     # --- Step 1: Initialize Basic SD Components ---
     print("Loading Basic Components...")
@@ -242,4 +242,15 @@ def run_adstyler_inference():
     print(f"Result saved to {OUTPUT_IMAGE}")
 
 if __name__ == "__main__":
-    run_adstyler_inference()
+    AD_COPY = "A smartphone is on sale now!"
+    METADATA = [0.1, 0.1, 0.8, 0.2] 
+    STYLE_IMAGE_PATH = "style30k/images_top10/s0546____0908_01_query_1_img_000098_1682331370726_08680369659788782.jpeg.jpg"
+
+    OUTPUT_IMAGE = "output_adstyler.png"
+
+    run_adstyler_inference(
+        ad_copy=AD_COPY, 
+        layout=METADATA, 
+        style_image_path=STYLE_IMAGE_PATH, 
+        output_image_path=OUTPUT_IMAGE
+    )
