@@ -126,3 +126,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GPT4ALL_MODEL_NAME = os.getenv('GPT4ALL_MODEL', 
     '/Users/phi/Library/Application Support/nomic.ai/GPT4All/DeepSeek-R1-Distill-Qwen-7B-Q4_0.gguf')
 
+# Layout生成方式配置
+# 可选值: "llm" (使用finetuned layout LLM) 或 "sample" (从训练数据随机采样)
+LAYOUT_GENERATION_METHOD = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
+
+# Layout LLM配置 (当LAYOUT_GENERATION_METHOD="llm"时使用)
+LAYOUT_LLM_CHECKPOINT_PATH = os.getenv('LAYOUT_LLM_CHECKPOINT_PATH', 
+    str(BASE_DIR.parent / 'layout-llm-finetuning' / 'finetune_layout_llm' / 'output_layout_llm' / 'checkpoint-500'))
+LAYOUT_LLM_BASE_MODEL = os.getenv('LAYOUT_LLM_BASE_MODEL', 'Qwen/Qwen2.5-1.5B')
+LAYOUT_PROB_MODEL_PATH = os.getenv('LAYOUT_PROB_MODEL_PATH',
+    str(BASE_DIR.parent / 'layout-llm-finetuning' / 'train_layout_distribution' / 'layout_prob_model.joblib'))
+LAYOUT_THRESHOLDS_PATH = os.getenv('LAYOUT_THRESHOLDS_PATH',
+    str(BASE_DIR.parent / 'layout-llm-finetuning' / 'train_layout_distribution' / 'layout_thresholds.json'))
+
+# Layout采样配置 (当LAYOUT_GENERATION_METHOD="sample"时使用)
+TRAIN_LAYOUT_JSON_PATH = os.getenv('TRAIN_LAYOUT_JSON_PATH',
+    str(BASE_DIR.parent / 'layout-llm-finetuning' / 'create_layout_dataset' / 'train_layout.json'))
+

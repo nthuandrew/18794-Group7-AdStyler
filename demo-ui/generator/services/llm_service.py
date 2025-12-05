@@ -5,6 +5,26 @@ from gpt4all import GPT4All
 import json
 import re
 import os
+import random
+import sys
+from pathlib import Path
+from typing import Dict, Optional
+
+# Add layout-llm-finetuning to path for imports
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+LAYOUT_LLM_DIR = BASE_DIR / 'layout-llm-finetuning'
+if LAYOUT_LLM_DIR.exists():
+    sys.path.insert(0, str(LAYOUT_LLM_DIR))
+    sys.path.insert(0, str(LAYOUT_LLM_DIR / 'finetune_layout_llm'))
+    sys.path.insert(0, str(LAYOUT_LLM_DIR / 'train_layout_distribution'))
+
+try:
+    from django.conf import settings as django_settings
+    HAS_DJANGO = True
+except ImportError:
+    # If not in Django context, use os.getenv
+    django_settings = None
+    HAS_DJANGO = False
 
 
 class LLMService:
@@ -22,6 +42,152 @@ class LLMService:
         self.model = None
         self.model_name = model_name or os.getenv('GPT4ALL_MODEL', 'DeepSeek-R1-Distill-Qwen-7B')
         self._initialize_model()
+        
+        # Initialize layout generation method
+        if HAS_DJANGO:
+            self.layout_method = getattr(django_settings, 'LAYOUT_GENERATION_METHOD', 'sample')
+        else:
+            self.layout_method = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
+        
+        self.layout_llm_model = None
+        self.layout_llm_tokenizer = None
+        self.layout_model = None
+        self.layout_thresholds = None
+        self.train_layouts = None
+        
+        if self.layout_method == 'llm':
+            self._initialize_layout_llm()
+        elif self.layout_method == 'sample':
+            self._initialize_layout_sampler()
+        else:
+            print(f"Warning: Unknown layout generation method: {self.layout_method}, using 'sample'")
+            self.layout_method = 'sample'
+            self._initialize_layout_sampler()
+    
+    def _initialize_layout_llm(self):
+        """Initialize finetuned layout LLM for text_layout generation"""
+        try:
+            if HAS_DJANGO:
+                checkpoint_path = getattr(django_settings, 'LAYOUT_LLM_CHECKPOINT_PATH', None)
+                base_model = getattr(django_settings, 'LAYOUT_LLM_BASE_MODEL', 'Qwen/Qwen2.5-1.5B')
+                prob_model_path = getattr(django_settings, 'LAYOUT_PROB_MODEL_PATH', None)
+                thresholds_path = getattr(django_settings, 'LAYOUT_THRESHOLDS_PATH', None)
+            else:
+                checkpoint_path = os.getenv('LAYOUT_LLM_CHECKPOINT_PATH', None)
+                base_model = os.getenv('LAYOUT_LLM_BASE_MODEL', 'Qwen/Qwen2.5-1.5B')
+                prob_model_path = os.getenv('LAYOUT_PROB_MODEL_PATH', None)
+                thresholds_path = os.getenv('LAYOUT_THRESHOLDS_PATH', None)
+            
+            if not checkpoint_path or not os.path.exists(checkpoint_path):
+                print(f"Warning: Layout LLM checkpoint not found: {checkpoint_path}")
+                print("Falling back to layout sampling")
+                self.layout_method = 'sample'
+                self._initialize_layout_sampler()
+                return
+            
+            print("Loading finetuned layout LLM...")
+            from infer_layout_llm import load_model_for_inference
+            from train_layout_distribution.layout_inference import load_model_and_thresholds
+            
+            self.layout_llm_model, self.layout_llm_tokenizer = load_model_for_inference(
+                checkpoint_path, base_model
+            )
+            
+            if prob_model_path and thresholds_path and os.path.exists(prob_model_path) and os.path.exists(thresholds_path):
+                ctx = load_model_and_thresholds(prob_model_path, thresholds_path)
+                self.layout_model = ctx["model"]
+                self.layout_thresholds = ctx["thresholds"]
+            
+            print("✓ Layout LLM loaded successfully")
+        except Exception as e:
+            print(f"Failed to load layout LLM: {e}")
+            print("Falling back to layout sampling")
+            self.layout_method = 'sample'
+            self._initialize_layout_sampler()
+    
+    def _initialize_layout_sampler(self):
+        """Initialize layout sampler from training data"""
+        try:
+            if HAS_DJANGO:
+                train_layout_path = getattr(django_settings, 'TRAIN_LAYOUT_JSON_PATH', None)
+            else:
+                train_layout_path = os.getenv('TRAIN_LAYOUT_JSON_PATH', None)
+            if not train_layout_path or not os.path.exists(train_layout_path):
+                print(f"Warning: Train layout JSON not found: {train_layout_path}")
+                print("Will use default layout")
+                self.train_layouts = []
+                return
+            
+            print(f"Loading training layouts from {train_layout_path}...")
+            with open(train_layout_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Extract all text_layouts
+            self.train_layouts = []
+            for item in data:
+                text_layout = item.get("text_layout")
+                if text_layout and isinstance(text_layout, dict):
+                    # Validate layout (color is optional, will be added if missing)
+                    if all(k in text_layout for k in ['x', 'y', 'width', 'height', 'alignment']):
+                        # Ensure color exists
+                        if "color" not in text_layout:
+                            text_layout["color"] = "white"
+                        self.train_layouts.append(text_layout)
+            
+            print(f"✓ Loaded {len(self.train_layouts)} training layouts for sampling")
+        except Exception as e:
+            print(f"Failed to load training layouts: {e}")
+            self.train_layouts = []
+    
+    def _sample_layout_from_training_data(self) -> Dict:
+        """Sample a random text_layout from training data"""
+        if self.train_layouts and len(self.train_layouts) > 0:
+            layout = random.choice(self.train_layouts).copy()
+            # Ensure color field exists
+            if "color" not in layout:
+                layout["color"] = "white"
+            return layout
+        else:
+            # Fallback to default layout
+            return {
+                "x": 0.1,
+                "y": 0.1,
+                "width": 0.5,
+                "height": 0.5,
+                "alignment": "center",
+                "color": "white"
+            }
+    
+    def _generate_layout_with_llm(self, ad_copy: str) -> Optional[Dict]:
+        """Generate text_layout using finetuned layout LLM"""
+        try:
+            from infer_layout_llm import generate_layout, extract_json_from_text, validate_and_fix_layout
+            
+            # Generate layout
+            response = generate_layout(
+                self.layout_llm_model,
+                self.layout_llm_tokenizer,
+                ad_copy,
+                max_new_tokens=200,
+                temperature=0.7,
+                top_p=0.9
+            )
+            
+            # Extract JSON
+            result = extract_json_from_text(response)
+            if not result:
+                return None
+            
+            text_layout = result.get("text_layout")
+            if not text_layout:
+                return None
+            
+            # Validate and fix
+            text_layout = validate_and_fix_layout(text_layout)
+            return text_layout
+        except Exception as e:
+            print(f"Layout LLM generation failed: {e}")
+            return None
     
     def _initialize_model(self):
         """Initialize GPT4All model"""
@@ -64,10 +230,37 @@ class LLMService:
         Returns:
             Dictionary containing ad information
         """
+        # Define allowed styles
+        STYLE_LIST = [
+            "Traditional culture 1",
+            "Impressionism",
+            "hand drawn style",
+            "Game scene picture 2",
+            "graphic portrait style",
+            "Op style",
+            "Traditional Chinese ink painting style 2",
+            "National characteristic art 1",
+            "Architectural sketch 1",
+            "Pulp noir style"
+        ]
+        
         # Default JSON structure
-        style_text = target_style if target_style else "professional"
+        # If target_style is provided and in the list, use it; otherwise use first style as default
+        if target_style:
+            # Check if target_style is in allowed list
+            style_found = False
+            for allowed_style in STYLE_LIST:
+                if target_style.lower() == allowed_style.lower():
+                    style_text = allowed_style
+                    style_found = True
+                    break
+            if not style_found:
+                style_text = STYLE_LIST[0]
+        else:
+            style_text = STYLE_LIST[0]  # Default to first style
+        
         default_json = {
-            "ad_description": f"{user_text}, {style_text} style, high quality, detailed",
+            "ad_description": f"{user_text}, {style_text}, high quality, detailed",
             "style": style_text,
             "ad_copy": f"Discover {user_text} - Experience the difference",
             "text_layout": {
@@ -75,12 +268,8 @@ class LLMService:
                 "y": 0.1,
                 "width": 0.5,
                 "height": 0.5,
-                "alignment": "left"
-            },
-            "text_style": {
-                "font_size": "large",
-                "color": "white",
-                "font_weight": "bold"
+                "alignment": "left",
+                "color": "white"
             }
         }
         
@@ -95,44 +284,44 @@ class LLMService:
         else:
             style_instruction = "\nPlease automatically select an appropriate ad style based on the user input."
         
-        system_prompt = """You are a professional ad design assistant. Generate a JSON object directly without any thinking process or explanation.
+        # Define allowed styles
+        STYLE_LIST = [
+            "Traditional culture 1",
+            "Impressionism",
+            "hand drawn style",
+            "Game scene picture 2",
+            "graphic portrait style",
+            "Op style",
+            "Traditional Chinese ink painting style 2",
+            "National characteristic art 1",
+            "Architectural sketch 1",
+            "Pulp noir style"
+        ]
+        
+        style_list_str = "\n".join([f"  - {style}" for style in STYLE_LIST])
+        
+        system_prompt = f"""You are a professional ad design assistant. Generate a JSON object directly without any thinking process or explanation.
 
 CRITICAL: Output ONLY the JSON object. Do NOT include any reasoning, thinking, or explanation before or after the JSON.
 
 Example:
 User input: KFC chicken advertisement
 Output:
-{
-    "ad_description": "A delicious KFC chicken advertisement, modern style, professional photography, high quality, detailed",
-    "style": "modern",
-    "ad_copy": "KFC BEYOND Fried Chicken, IT'S A KENTUCKY FRIED MIRACLE.",
-    "text_layout": {
-        "x": 0.1,
-        "y": 0.2,
-        "width": 0.3,
-        "height": 0.5,
-        "alignment": "left"
-    },
-    "text_style": {
-        "font_size": "large",
-        "color": "white",
-        "font_weight": "bold"
-    }
-}
+{{
+    "ad_description": "A delicious KFC chicken advertisement, Pulp noir style, professional photography, high quality, detailed",
+    "style": "Pulp noir style",
+    "ad_copy": "KFC BEYOND Fried Chicken, IT'S A KENTUCKY FRIED MIRACLE."
+}}
 
 Format requirements:
-1. ad_description: Use English, detailed description of ad image, including scene, style, quality, etc.
-2. style: Style name, such as modern, vintage, minimalist, luxury, cartoon, realistic, etc.
+1. ad_description: Use English, detailed description of ad image, including scene, style, quality, etc. The style mentioned in ad_description must match the style field.
+2. style: MUST be one of the following styles (choose the most appropriate one for the user's request):
+{style_list_str}
 3. ad_copy: Generate creative and compelling advertising copy that fits the ad theme. Do NOT copy the user input directly.
-4. text_layout: 
-   - x, y, width, height: Values between 0-1
-   - alignment: left, center, or right
-5. text_style:
-   - font_size: small, medium, or large
-   - color: Color name, such as white, black, red, blue, etc.
-   - font_weight: normal or bold
 
-Output ONLY the JSON object starting with { and ending with }. No other text."""
+IMPORTANT: The "style" field MUST be exactly one of the styles listed above. Do NOT use any other style names.
+
+Output ONLY the JSON object starting with {{ and ending with }}. No other text."""
 
         user_prompt = f"User input: {user_text}{style_instruction}\n\nPlease generate JSON format ad information according to the above format requirements."
         
@@ -179,33 +368,61 @@ Output ONLY the JSON object starting with { and ending with }. No other text."""
                 
                 try:
                     ad_info = json.loads(json_str)
-                    # Validate required fields
-                    required_keys = ['ad_description', 'style', 'ad_copy', 'text_layout', 'text_style']
+                    # Validate required fields (only ad_description, style, ad_copy)
+                    required_keys = ['ad_description', 'style', 'ad_copy']
                     if all(key in ad_info for key in required_keys):
                         # Detect and fix common errors: if ad_copy is instruction text or user input, generate a default
                         ad_copy_value = str(ad_info.get('ad_copy', ''))
                         if 'Please automatically' in ad_copy_value or 'based on the user input' in ad_copy_value or ad_copy_value == user_text:
                             ad_info['ad_copy'] = default_json['ad_copy']
                         
-                        # Detect and fix: if style is instruction text, use default
-                        style_value = str(ad_info.get('style', ''))
-                        if 'such as' in style_value or 'optional' in style_value or len(style_value) > 50:
-                            ad_info['style'] = 'modern'
+                        # Validate and fix style: must be one of the allowed styles
+                        STYLE_LIST = [
+                            "Traditional culture 1",
+                            "Impressionism",
+                            "hand drawn style",
+                            "Game scene picture 2",
+                            "graphic portrait style",
+                            "Op style",
+                            "Traditional Chinese ink painting style 2",
+                            "National characteristic art 1",
+                            "Architectural sketch 1",
+                            "Pulp noir style"
+                        ]
                         
-                        # Validate text_layout structure
-                        if isinstance(ad_info.get('text_layout'), dict):
-                            layout = ad_info['text_layout']
-                            layout_keys = ['x', 'y', 'width', 'height', 'alignment']
-                            if all(key in layout for key in layout_keys):
-                                # Validate value ranges
-                                if all(0 <= layout.get(k, -1) <= 1 for k in ['x', 'y', 'width', 'height']):
-                                    return ad_info
-                        else:
-                            # If text_layout missing or incomplete, use default
-                            print("text_layout missing or incomplete, using default")
-                            ad_info['text_layout'] = default_json['text_layout']
-                            if all(key in ad_info for key in required_keys):
-                                return ad_info
+                        style_value = str(ad_info.get('style', '')).strip()
+                        # Check if style is in the allowed list (case-insensitive)
+                        style_found = False
+                        for allowed_style in STYLE_LIST:
+                            if style_value.lower() == allowed_style.lower():
+                                ad_info['style'] = allowed_style  # Use exact case from list
+                                style_found = True
+                                break
+                        
+                        if not style_found:
+                            # If style is not in the list, try to find the closest match or use default
+                            print(f"Warning: Style '{style_value}' not in allowed list, selecting default")
+                            # Default to first style as fallback
+                            ad_info['style'] = STYLE_LIST[0]
+                        
+                        # Generate text_layout using selected method
+                        text_layout = None
+                        if self.layout_method == 'llm':
+                            print("Generating text_layout using finetuned LLM...")
+                            text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
+                        
+                        if text_layout is None:
+                            # Fallback to sampling or default
+                            if self.layout_method == 'sample':
+                                print("Sampling text_layout from training data...")
+                                text_layout = self._sample_layout_from_training_data()
+                            else:
+                                text_layout = default_json['text_layout']
+                        
+                        # Add text_layout to result
+                        ad_info['text_layout'] = text_layout
+
+                        return ad_info
                     else:
                         # If fields missing, try to complete with defaults
                         print(f"Missing required fields, trying to complete. Existing fields: {list(ad_info.keys())}")
@@ -213,27 +430,76 @@ Output ONLY the JSON object starting with { and ending with }. No other text."""
                             if key not in ad_info:
                                 if key == 'ad_copy':
                                     ad_info[key] = default_json['ad_copy']
+                                elif key == 'style':
+                                    # Ensure style is from allowed list
+                                    ad_info[key] = STYLE_LIST[0]
                                 elif key in default_json:
                                     ad_info[key] = default_json[key]
                         
+                        # Validate style again after completion
+                        style_value = str(ad_info.get('style', '')).strip()
+                        style_found = False
+                        for allowed_style in STYLE_LIST:
+                            if style_value.lower() == allowed_style.lower():
+                                ad_info['style'] = allowed_style
+                                style_found = True
+                                break
+                        if not style_found:
+                            ad_info['style'] = STYLE_LIST[0]
+                        
+                        # Generate text_layout
+                        text_layout = None
+                        if self.layout_method == 'llm':
+                            text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
+                        
+                        if text_layout is None:
+                            if self.layout_method == 'sample':
+                                text_layout = self._sample_layout_from_training_data()
+                            else:
+                                text_layout = default_json['text_layout']
+                        
+                        ad_info['text_layout'] = text_layout
+                        
                         # Validate again
-                        if all(key in ad_info for key in required_keys):
-                            if isinstance(ad_info.get('text_layout'), dict):
-                                layout = ad_info['text_layout']
-                                layout_keys = ['x', 'y', 'width', 'height', 'alignment']
-                                if all(key in layout for key in layout_keys):
-                                    if all(0 <= layout.get(k, -1) <= 1 for k in ['x', 'y', 'width', 'height']):
-                                        return ad_info
+                        if all(key in ad_info for key in required_keys + ['text_layout']):
+                            return ad_info
                 except json.JSONDecodeError as e:
                     print(f"JSON parsing error: {e}")
                     print(f"Attempted JSON string (first 300 chars): {json_str[:300]}")
             
-            # If parsing fails, return default JSON
+            # If parsing fails, return default JSON with generated layout
             print(f"LLM response parsing failed, using default. Response content (first 500 chars): {response[:500]}")
+            
+            # Still try to generate layout even if LLM failed
+            text_layout = None
+            if self.layout_method == 'llm':
+                text_layout = self._generate_layout_with_llm(user_text)
+            
+            if text_layout is None:
+                if self.layout_method == 'sample':
+                    text_layout = self._sample_layout_from_training_data()
+                else:
+                    text_layout = default_json['text_layout']
+            
+            default_json['text_layout'] = text_layout
             return default_json
             
         except Exception as e:
             print(f"LLM processing error: {e}")
-            # Return default JSON on error
+            # Return default JSON on error, but still generate layout
+            text_layout = None
+            if self.layout_method == 'llm':
+                try:
+                    text_layout = self._generate_layout_with_llm(user_text)
+                except:
+                    pass
+            
+            if text_layout is None:
+                if self.layout_method == 'sample':
+                    text_layout = self._sample_layout_from_training_data()
+                else:
+                    text_layout = default_json['text_layout']
+            
+            default_json['text_layout'] = text_layout
             return default_json
 
