@@ -331,7 +331,7 @@ class LLMService:
             }
     
     def _initialize_model(self):
-        """Initialize GPT4All model"""
+        """Initialize GPT4All model, auto-download if not found"""
         try:
             print(f"Attempting to load model: {self.model_name}")
             
@@ -339,19 +339,21 @@ class LLMService:
             if os.path.exists(self.model_name):
                 print(f"Loading model from path: {self.model_name}")
                 try:
-                    self.model = GPT4All(self.model_name)
+                    self.model = GPT4All(self.model_name, allow_download=False)
                     print(f"✓ Successfully loaded model: {self.model_name}")
                     return
                 except Exception as e:
                     print(f"✗ Failed to load from path: {e}")
             
-            # If path doesn't exist or failed, load default model
-            print("Model path not found, loading default model...")
+            # If path doesn't exist, try to load by name (will auto-download if not found)
+            print(f"Model path not found, attempting to load by name: {self.model_name}")
+            print("If model is not found locally, it will be downloaded automatically...")
             try:
-                self.model = GPT4All("orca-mini-3b-gguf2-q4_0.gguf")
-                print("✓ Loaded default model: orca-mini-3b-gguf2-q4_0.gguf")
+                self.model = GPT4All(self.model_name, allow_download=True)
+                print(f"✓ Successfully loaded/downloaded model: {self.model_name}")
+                return
             except Exception as e:
-                print(f"✗ Failed to load default model: {e}")
+                print(f"✗ Failed to load/download model: {e}")
                 raise
                 
         except Exception as e:
@@ -391,6 +393,22 @@ class LLMService:
                 "color": "white"
             }
         }
+
+        # user_input = "KFC chicken in hand drawn style"
+        # example_json = {
+        #         "ad_description": "A vibrant and modern depiction of a delicious KFC chicken meal in an adventurous setting, \
+        #             showcasing high-quality photography that captures the essence of taste and comfort.",
+        #         "style": "hand drawn style",
+        #         "ad_copy": "KFC BEYOND Fried Chicken, IT'S A KENTUCKY FRIED MIRACLE.",
+        #         "text_layout": {
+        #             "x": 0.1,
+        #             "y": 0.2,
+        #             "width": 0.3,
+        #             "height": 0.5,
+        #             "alignment": "left",
+        #             "color": "yellow"
+        #         }
+        #     }
         
         if not self.model:
             # If model not initialized, return default JSON

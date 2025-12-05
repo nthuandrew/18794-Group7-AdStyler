@@ -128,7 +128,7 @@ GPT4ALL_MODEL_NAME = os.getenv('GPT4ALL_MODEL',
 
 # Layout生成方式配置
 # 可选值: "llm" (使用finetuned layout LLM) 或 "sample" (从训练数据随机采样)
-LAYOUT_GENERATION_METHOD = 'sample'
+LAYOUT_GENERATION_METHOD = 'llm'
 
 # Layout LLM配置 (当LAYOUT_GENERATION_METHOD="llm"时使用)
 LAYOUT_LLM_CHECKPOINT_PATH = os.getenv('LAYOUT_LLM_CHECKPOINT_PATH', 
