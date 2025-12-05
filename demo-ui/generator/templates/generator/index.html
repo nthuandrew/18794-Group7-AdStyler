@@ -319,6 +319,50 @@
         const jsonDisplay = document.getElementById('jsonDisplay');
         const jsonContent = document.getElementById('jsonContent');
         
+        // Poll for image status
+        let pollInterval = null;
+        let pollCount = 0;
+        const MAX_POLL_ATTEMPTS = 60; // Poll for up to 5 minutes (60 * 5 seconds)
+        
+        function pollImageStatus(recordId) {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            
+            pollCount = 0;
+            pollInterval = setInterval(async () => {
+                pollCount++;
+                if (pollCount > MAX_POLL_ATTEMPTS) {
+                    clearInterval(pollInterval);
+                    imagePreview.innerHTML = '<div class="placeholder" style="color: #c33;">⏱️ Image generation is taking longer than expected. Please refresh the page later.</div>';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/record/${recordId}/`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (data.image_status === 'ready' && data.image_url) {
+                            // Image is ready!
+                            clearInterval(pollInterval);
+                            imagePreview.innerHTML = `<img src="${data.image_url}" alt="Generated image">`;
+                            successMessage.textContent = 'Image generated successfully!';
+                        } else if (data.image_status === 'error') {
+                            // Image generation failed
+                            clearInterval(pollInterval);
+                            imagePreview.innerHTML = '<div class="placeholder" style="color: #c33;">❌ Image generation failed. Please try again.</div>';
+                            errorMessage.textContent = 'Image generation failed';
+                            errorMessage.classList.add('active');
+                        }
+                        // If status is 'generating', continue polling
+                    }
+                } catch (error) {
+                    console.error('Error polling image status:', error);
+                }
+            }, 5000); // Poll every 5 seconds
+        }
+        
         // Format JSON display
         function formatJsonDisplay(jsonObj) {
             if (!jsonObj) return '';
@@ -361,6 +405,13 @@
             jsonDisplay.style.display = 'none';
             imagePreview.innerHTML = '<div class="placeholder">Generated image will appear here</div>';
             
+            // Clear any existing polling
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            pollCount = 0;
+            
             // Show loading state
             loading.classList.add('active');
             generateBtn.disabled = true;
@@ -379,18 +430,27 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Display generated image
-                    imagePreview.innerHTML = `<img src="${data.image_url}" alt="Generated image">`;
-                    
-                    // Display JSON information
+                    // Display JSON information immediately
                     if (data.ad_json) {
                         jsonContent.innerHTML = formatJsonDisplay(data.ad_json);
                         jsonDisplay.style.display = 'block';
                     }
                     
-                    // Show success message
-                    successMessage.textContent = 'Image generated successfully!';
-                    successMessage.classList.add('active');
+                    // Check if image is ready or still generating
+                    if (data.image_url) {
+                        // Image is ready
+                        imagePreview.innerHTML = `<img src="${data.image_url}" alt="Generated image">`;
+                        successMessage.textContent = 'Image generated successfully!';
+                        successMessage.classList.add('active');
+                    } else if (data.image_status === 'generating') {
+                        // Image is still generating, show loading and poll for updates
+                        imagePreview.innerHTML = '<div class="placeholder">🖼️ Generating image, please wait...</div>';
+                        successMessage.textContent = 'JSON generated successfully! Image is being generated...';
+                        successMessage.classList.add('active');
+                        
+                        // Poll for image completion
+                        pollImageStatus(data.record_id);
+                    }
                 } else {
                     // Show error message
                     errorMessage.textContent = data.error || 'Error generating image';

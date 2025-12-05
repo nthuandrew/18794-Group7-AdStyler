@@ -4,6 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 import json
+import threading
 from .services.llm_service import LLMService
 from .services.diffusion_service import DiffusionService
 from .models import ImageGeneration
@@ -59,28 +60,47 @@ def generate_image(request):
         ad_copy = ad_info.get('ad_copy', '')
         text_layout = ad_info.get('text_layout', None)
         
-        # Generate image using diffusion model with text overlay
-        image_url = diffusion_service.generate_image_from_prompt(
-            style=target_style,
-            ad_copy=ad_copy,
-            text_layout=text_layout
-        )
-        
-        # Save record to database (including original request and generated JSON)
+        # Create database record first (without image_path)
         generation_record = ImageGeneration.objects.create(
             user_text=user_text,
             target_style=target_style,
             processed_prompt=processed_prompt,
             ad_json=ad_json_str,
-            image_path=image_url
+            image_path=''  # Will be updated when image is generated
         )
         
-        return JsonResponse({
+        # Return JSON immediately, generate image in background
+        response_data = {
             'success': True,
-            'image_url': image_url,
             'ad_json': ad_info,
-            'record_id': generation_record.id
-        })
+            'record_id': generation_record.id,
+            'image_status': 'generating',  # Indicate image is being generated
+            'image_url': None
+        }
+        
+        # Generate image in background thread
+        def generate_image_async():
+            try:
+                image_url = diffusion_service.generate_image_from_prompt(
+                    style=target_style,
+                    ad_copy=ad_copy,
+                    text_layout=text_layout
+                )
+                # Update database record with image path
+                generation_record.image_path = image_url
+                generation_record.save(update_fields=['image_path'])
+                print(f"✓ Image generated and saved: {image_url}")
+            except Exception as e:
+                print(f"✗ Error generating image in background: {e}")
+                # Update record with error status (optional)
+                generation_record.image_path = f"ERROR: {str(e)}"
+                generation_record.save(update_fields=['image_path'])
+        
+        # Start image generation in background
+        image_thread = threading.Thread(target=generate_image_async, daemon=True)
+        image_thread.start()
+        
+        return JsonResponse(response_data)
         
     except json.JSONDecodeError:
         return JsonResponse({
@@ -91,6 +111,36 @@ def generate_image(request):
         return JsonResponse({
             'success': False,
             'error': f'Error generating image: {str(e)}'
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_record_status(request, record_id):
+    """Get status of a specific generation record"""
+    try:
+        record = ImageGeneration.objects.get(id=record_id)
+        ad_json_dict = record.get_ad_json_dict()
+        
+        return JsonResponse({
+            'success': True,
+            'id': record.id,
+            'user_text': record.user_text,
+            'target_style': record.target_style,
+            'processed_prompt': record.processed_prompt,
+            'ad_json': ad_json_dict,
+            'image_url': record.image_path if record.image_path and not record.image_path.startswith('ERROR:') else None,
+            'image_status': 'ready' if record.image_path and not record.image_path.startswith('ERROR:') else 'generating' if not record.image_path else 'error',
+            'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+    except ImageGeneration.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Record not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         }, status=500)
 
 
@@ -108,7 +158,8 @@ def history(request):
             'target_style': record.target_style,
             'processed_prompt': record.processed_prompt,
             'ad_json': ad_json_dict,
-            'image_url': record.image_path,
+            'image_url': record.image_path if record.image_path and not record.image_path.startswith('ERROR:') else None,
+            'image_status': 'ready' if record.image_path and not record.image_path.startswith('ERROR:') else 'generating' if not record.image_path else 'error',
             'created_at': record.created_at.strftime('%Y-%m-%d %H:%M:%S')
         })
     
