@@ -113,7 +113,7 @@ class AdStylerCLIPWrapper(nn.Module):
         
         return [final_output]
 def get_ref_image_path_smart(style_name):
-    STYLE_REPRESENTATIVES_PATH = "style_representatives.json"
+    STYLE_REPRESENTATIVES_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_representatives.json"
 
     # Load the map once
     if os.path.exists(STYLE_REPRESENTATIVES_PATH):
@@ -144,7 +144,7 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
     # Inputs
     AD_COPY = ad_copy
     LAYOUT = layout 
-    STYLE_IMAGE_PATH = get_ref_image_path_smart(style)
+    STYLE_IMAGE_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/" + get_ref_image_path_smart(style)
     OUTPUT_IMAGE = output_image_path
 
     # Base Models
