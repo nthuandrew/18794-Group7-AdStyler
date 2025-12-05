@@ -61,7 +61,7 @@ def generate_image(request):
         
         # Generate image using diffusion model with text overlay
         image_url = diffusion_service.generate_image_from_prompt(
-            processed_prompt,
+            style=target_style,
             ad_copy=ad_copy,
             text_layout=text_layout
         )

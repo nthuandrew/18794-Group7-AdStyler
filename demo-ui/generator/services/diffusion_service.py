@@ -100,7 +100,7 @@ class DiffusionService:
     
     def generate_image_from_prompt(
         self,
-        prompt: str,
+        style: str,
         ad_copy: Optional[str] = None,
         text_layout: Optional[Dict] = None
     ) -> str:
@@ -115,48 +115,15 @@ class DiffusionService:
         Returns:
             Tuple of (image object, saved path)
         """
-        # Generate base image
-        # image = self.generate_image(prompt)
-        
-        # # Add text overlay if provided
-        # if ad_copy and text_layout:
-        #     from .text_overlay_service import TextOverlayService
-        #     text_service = TextOverlayService()
-        #     try:
-        #         image = text_service.add_text_overlay(image, ad_copy, text_layout)
-        #         print(f"✓ Text overlay added: '{ad_copy[:50]}...' at position ({text_layout.get('x', 0):.2f}, {text_layout.get('y', 0):.2f})")
-        #     except Exception as e:
-        #         print(f"⚠ Warning: Failed to add text overlay: {e}")
-        #         # Continue with image without text overlay
-        
-        # # Generate filename
-        # import hashlib
-        # import time
-        # filename_hash = hashlib.md5(f"{prompt}{time.time()}".encode()).hexdigest()[:8]
-        # filename = f"generated_{filename_hash}.png"
-        
-        # # Save image
-        # saved_path = self.save_image(image, filename)
-        
-        # return image, saved_path
-        AD_COPY = "An headphone is 50 percent off today!"
-        METADATA = [0.1, 0.1, 0.8, 0.2] # x, y, width, height
-        STYLE = "Architectural sketch 1" 
+        # AD_COPY = "An headphone is 50 percent off today!"
+        # METADATA = [0.1, 0.1, 0.8, 0.2] # x, y, width, height
+        metadata = []
+        metadata.append(text_layout["x"])
+        metadata.append(text_layout["y"])
+        metadata.append(text_layout["width"])
+        metadata.append(text_layout["height"])
+        # STYLE = "Architectural sketch 1" 
 
-        # filename = "output_adstyler.png"
-        # media_dir = settings.MEDIA_ROOT
-        # os.makedirs(media_dir, exist_ok=True)
-        
-        # # Save image
-        # file_path = os.path.join(media_dir, filename)
-
-        # run_adstyler_inference(
-        #     ad_copy=AD_COPY, 
-        #     layout=METADATA, 
-        #     style=STYLE, 
-        #     output_image_path=file_path
-        # )
-        # return os.path.join(settings.MEDIA_URL, filename)
         media_dir = settings.MEDIA_ROOT
         os.makedirs(media_dir, exist_ok=True)
 
@@ -164,15 +131,12 @@ class DiffusionService:
         output_path = os.path.join(media_dir, filename)
 
         run_adstyler_inference(
-            ad_copy=AD_COPY,
-            layout=METADATA,
-            style=STYLE,
+            ad_copy=ad_copy,
+            layout=metadata,
+            style=style,
             output_image_path=output_path,
         )
 
         # 回傳給前端用的 URL
         image_url = os.path.join(settings.MEDIA_URL, filename)
         return image_url
-
-        
-
