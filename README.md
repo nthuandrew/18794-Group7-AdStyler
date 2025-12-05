@@ -1,9 +1,10 @@
 ## Dataset prepare:
 Style Dataset:
-  - style30k/
+  - adstyler_src/style30k/
     - images_top10/
+
 AdImageNet Dataset:
-  - AdImageNet/
+  - adstyler_src/AdImageNet/
     - train/
     - test/
    
