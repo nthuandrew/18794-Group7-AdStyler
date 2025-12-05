@@ -11,12 +11,35 @@ from pathlib import Path
 from typing import Dict, Optional
 
 # Add layout-llm-finetuning to path for imports
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+# __file__ is: demo-ui/generator/services/llm_service.py
+# We need to go up 4 levels to reach project root: 18794-Group7-AdStyler
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 LAYOUT_LLM_DIR = BASE_DIR / 'layout-llm-finetuning'
+FINETUNE_DIR = LAYOUT_LLM_DIR / 'finetune_layout_llm'
+TRAIN_DIST_DIR = LAYOUT_LLM_DIR / 'train_layout_distribution'
+
+# Debug: Print path information
+print(f"Debug path calculation:")
+print(f"  __file__: {__file__}")
+print(f"  BASE_DIR: {BASE_DIR}")
+print(f"  LAYOUT_LLM_DIR: {LAYOUT_LLM_DIR} (exists: {LAYOUT_LLM_DIR.exists()})")
+print(f"  FINETUNE_DIR: {FINETUNE_DIR} (exists: {FINETUNE_DIR.exists()})")
+print(f"  TRAIN_DIST_DIR: {TRAIN_DIST_DIR} (exists: {TRAIN_DIST_DIR.exists()})")
+
 if LAYOUT_LLM_DIR.exists():
+    # Add directories to path in correct order
+    if FINETUNE_DIR.exists():
+        sys.path.insert(0, str(FINETUNE_DIR))
+    if TRAIN_DIST_DIR.exists():
+        sys.path.insert(0, str(TRAIN_DIST_DIR))
     sys.path.insert(0, str(LAYOUT_LLM_DIR))
-    sys.path.insert(0, str(LAYOUT_LLM_DIR / 'finetune_layout_llm'))
-    sys.path.insert(0, str(LAYOUT_LLM_DIR / 'train_layout_distribution'))
+    
+    print(f"Added to Python path:")
+    print(f"  - {FINETUNE_DIR}")
+    print(f"  - {TRAIN_DIST_DIR}")
+    print(f"  - {LAYOUT_LLM_DIR}")
+else:
+    print(f"Warning: layout-llm-finetuning directory not found at: {LAYOUT_LLM_DIR}")
 
 try:
     from django.conf import settings as django_settings
@@ -49,6 +72,8 @@ class LLMService:
         else:
             self.layout_method = os.getenv('LAYOUT_GENERATION_METHOD', 'sample')
         
+        print(f"Layout generation method configured: {self.layout_method}")
+        
         self.layout_llm_model = None
         self.layout_llm_tokenizer = None
         self.layout_model = None
@@ -56,13 +81,20 @@ class LLMService:
         self.train_layouts = None
         
         if self.layout_method == 'llm':
+            print("Initializing layout LLM...")
             self._initialize_layout_llm()
+            # Check if initialization was successful
+            if self.layout_llm_model is None:
+                print("⚠ Layout LLM initialization failed, but continuing with sample method")
         elif self.layout_method == 'sample':
+            print("Initializing layout sampler...")
             self._initialize_layout_sampler()
         else:
             print(f"Warning: Unknown layout generation method: {self.layout_method}, using 'sample'")
             self.layout_method = 'sample'
             self._initialize_layout_sampler()
+        
+        print(f"Final layout generation method: {self.layout_method}")
     
     def _initialize_layout_llm(self):
         """Initialize finetuned layout LLM for text_layout generation"""
@@ -78,30 +110,105 @@ class LLMService:
                 prob_model_path = os.getenv('LAYOUT_PROB_MODEL_PATH', None)
                 thresholds_path = os.getenv('LAYOUT_THRESHOLDS_PATH', None)
             
-            if not checkpoint_path or not os.path.exists(checkpoint_path):
-                print(f"Warning: Layout LLM checkpoint not found: {checkpoint_path}")
-                print("Falling back to layout sampling")
-                self.layout_method = 'sample'
-                self._initialize_layout_sampler()
-                return
+            print(f"Checkpoint path: {checkpoint_path}")
+            print(f"Base model: {base_model}")
+            print(f"Prob model path: {prob_model_path}")
+            print(f"Thresholds path: {thresholds_path}")
+            
+            if not checkpoint_path:
+                print("Error: LAYOUT_LLM_CHECKPOINT_PATH is not set")
+                print("Please set LAYOUT_LLM_CHECKPOINT_PATH in settings.py or environment variable")
+                raise ValueError("LAYOUT_LLM_CHECKPOINT_PATH not configured")
+            
+            if not os.path.exists(checkpoint_path):
+                print(f"Error: Layout LLM checkpoint not found at: {checkpoint_path}")
+                print("Please check the path in settings.py:")
+                print(f"  LAYOUT_LLM_CHECKPOINT_PATH = '{checkpoint_path}'")
+                raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
             
             print("Loading finetuned layout LLM...")
-            from infer_layout_llm import load_model_for_inference
-            from train_layout_distribution.layout_inference import load_model_and_thresholds
+            try:
+                # Use importlib to load modules from file paths
+                import importlib.util
+                
+                # Import infer_layout_llm
+                infer_module_path = FINETUNE_DIR / 'infer_layout_llm.py'
+                if not infer_module_path.exists():
+                    raise FileNotFoundError(f"infer_layout_llm.py not found at {infer_module_path}")
+                
+                print(f"Loading infer_layout_llm from {infer_module_path}")
+                spec = importlib.util.spec_from_file_location("infer_layout_llm", infer_module_path)
+                infer_module = importlib.util.module_from_spec(spec)
+                # Add parent directory to sys.path for infer_layout_llm's imports
+                original_path = sys.path.copy()
+                sys.path.insert(0, str(FINETUNE_DIR.parent))
+                try:
+                    spec.loader.exec_module(infer_module)
+                finally:
+                    sys.path[:] = original_path
+                
+                load_model_for_inference = infer_module.load_model_for_inference
+                print("✓ Loaded infer_layout_llm module")
+                
+                # Import layout_inference
+                layout_inf_path = TRAIN_DIST_DIR / 'layout_inference.py'
+                if not layout_inf_path.exists():
+                    raise FileNotFoundError(f"layout_inference.py not found at {layout_inf_path}")
+                
+                print(f"Loading layout_inference from {layout_inf_path}")
+                spec = importlib.util.spec_from_file_location("layout_inference", layout_inf_path)
+                layout_inf_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(layout_inf_module)
+                load_model_and_thresholds = layout_inf_module.load_model_and_thresholds
+                print("✓ Loaded layout_inference module")
+                
+            except ModuleNotFoundError as import_error:
+                missing_module = str(import_error).split("'")[1] if "'" in str(import_error) else "unknown"
+                print(f"✗ Missing required dependency: {missing_module}")
+                print(f"\nTo use layout LLM generation, please install the required dependencies:")
+                print(f"  pip install torch transformers peft accelerate scikit-learn joblib numpy")
+                print(f"\nOr install from requirements.txt:")
+                print(f"  pip install -r requirements.txt")
+                print(f"\nError details: {import_error}")
+                raise ImportError(
+                    f"Missing dependency '{missing_module}'. "
+                    f"Please install layout LLM dependencies: "
+                    f"pip install torch transformers peft accelerate scikit-learn joblib numpy"
+                ) from import_error
+            except Exception as import_error:
+                print(f"Error importing layout LLM modules: {import_error}")
+                import traceback
+                traceback.print_exc()
+                print(f"\nMake sure layout-llm-finetuning directory is accessible")
+                print(f"Expected paths:")
+                print(f"  - {FINETUNE_DIR / 'infer_layout_llm.py'} (exists: {infer_module_path.exists() if 'infer_module_path' in locals() else 'unknown'})")
+                print(f"  - {TRAIN_DIST_DIR / 'layout_inference.py'} (exists: {layout_inf_path.exists() if 'layout_inf_path' in locals() else 'unknown'})")
+                raise
             
+            print(f"Loading model from checkpoint: {checkpoint_path}")
             self.layout_llm_model, self.layout_llm_tokenizer = load_model_for_inference(
                 checkpoint_path, base_model
             )
             
             if prob_model_path and thresholds_path and os.path.exists(prob_model_path) and os.path.exists(thresholds_path):
+                print("Loading layout probability model and thresholds...")
                 ctx = load_model_and_thresholds(prob_model_path, thresholds_path)
                 self.layout_model = ctx["model"]
                 self.layout_thresholds = ctx["thresholds"]
+                print("✓ Layout probability model loaded")
+            else:
+                print("Warning: Layout probability model or thresholds not found, will skip distribution checking")
+                if prob_model_path:
+                    print(f"  Prob model path: {prob_model_path} (exists: {os.path.exists(prob_model_path) if prob_model_path else False})")
+                if thresholds_path:
+                    print(f"  Thresholds path: {thresholds_path} (exists: {os.path.exists(thresholds_path) if thresholds_path else False})")
             
             print("✓ Layout LLM loaded successfully")
         except Exception as e:
-            print(f"Failed to load layout LLM: {e}")
-            print("Falling back to layout sampling")
+            print(f"✗ Failed to load layout LLM: {e}")
+            import traceback
+            traceback.print_exc()
+            print("\nFalling back to layout sampling")
             self.layout_method = 'sample'
             self._initialize_layout_sampler()
     
@@ -330,8 +437,11 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
             response = self.model.generate(
                 full_prompt,
-                max_tokens=800,  # Reduced to limit thinking chain length
+                max_tokens=2500,  # Increased to allow longer reasoning chain and ensure completion
                 temp=0.5,  # Lower temperature for more direct output
+                top_k=40,  # Increase diversity while maintaining quality
+                top_p=0.9,  # Nucleus sampling
+                repeat_penalty=1.1,  # Prevent repetition
             )
             
             # Clean response text, try to extract JSON
@@ -408,16 +518,20 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
                         # Generate text_layout using selected method
                         text_layout = None
                         if self.layout_method == 'llm':
-                            print("Generating text_layout using finetuned LLM...")
-                            text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
-                        
-                        if text_layout is None:
-                            # Fallback to sampling or default
-                            if self.layout_method == 'sample':
-                                print("Sampling text_layout from training data...")
+                            print(f"Generating text_layout using finetuned LLM (method: {self.layout_method})...")
+                            if self.layout_llm_model is None:
+                                print("Warning: Layout LLM model not loaded, falling back to sampling")
                                 text_layout = self._sample_layout_from_training_data()
                             else:
-                                text_layout = default_json['text_layout']
+                                text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
+                        elif self.layout_method == 'sample':
+                            print(f"Sampling text_layout from training data (method: {self.layout_method})...")
+                            text_layout = self._sample_layout_from_training_data()
+                        
+                        if text_layout is None:
+                            # Final fallback to default
+                            print("Using default text_layout")
+                            text_layout = default_json['text_layout']
                         
                         # Add text_layout to result
                         ad_info['text_layout'] = text_layout
@@ -450,13 +564,16 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
                         # Generate text_layout
                         text_layout = None
                         if self.layout_method == 'llm':
-                            text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
-                        
-                        if text_layout is None:
-                            if self.layout_method == 'sample':
+                            if self.layout_llm_model is None:
+                                print("Warning: Layout LLM model not loaded, falling back to sampling")
                                 text_layout = self._sample_layout_from_training_data()
                             else:
-                                text_layout = default_json['text_layout']
+                                text_layout = self._generate_layout_with_llm(ad_info.get('ad_copy', user_text))
+                        elif self.layout_method == 'sample':
+                            text_layout = self._sample_layout_from_training_data()
+                        
+                        if text_layout is None:
+                            text_layout = default_json['text_layout']
                         
                         ad_info['text_layout'] = text_layout
                         
@@ -473,13 +590,16 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
             # Still try to generate layout even if LLM failed
             text_layout = None
             if self.layout_method == 'llm':
-                text_layout = self._generate_layout_with_llm(user_text)
-            
-            if text_layout is None:
-                if self.layout_method == 'sample':
+                if self.layout_llm_model is None:
+                    print("Warning: Layout LLM model not loaded, falling back to sampling")
                     text_layout = self._sample_layout_from_training_data()
                 else:
-                    text_layout = default_json['text_layout']
+                    text_layout = self._generate_layout_with_llm(user_text)
+            elif self.layout_method == 'sample':
+                text_layout = self._sample_layout_from_training_data()
+            
+            if text_layout is None:
+                text_layout = default_json['text_layout']
             
             default_json['text_layout'] = text_layout
             return default_json
@@ -489,16 +609,20 @@ Output ONLY the JSON object starting with {{ and ending with }}. No other text."
             # Return default JSON on error, but still generate layout
             text_layout = None
             if self.layout_method == 'llm':
-                try:
-                    text_layout = self._generate_layout_with_llm(user_text)
-                except:
-                    pass
-            
-            if text_layout is None:
-                if self.layout_method == 'sample':
+                if self.layout_llm_model is None:
+                    print("Warning: Layout LLM model not loaded, falling back to sampling")
                     text_layout = self._sample_layout_from_training_data()
                 else:
-                    text_layout = default_json['text_layout']
+                    try:
+                        text_layout = self._generate_layout_with_llm(user_text)
+                    except Exception as layout_error:
+                        print(f"Layout LLM generation error: {layout_error}")
+                        text_layout = self._sample_layout_from_training_data()
+            elif self.layout_method == 'sample':
+                text_layout = self._sample_layout_from_training_data()
+            
+            if text_layout is None:
+                text_layout = default_json['text_layout']
             
             default_json['text_layout'] = text_layout
             return default_json
