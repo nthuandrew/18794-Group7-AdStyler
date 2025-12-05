@@ -56,9 +56,15 @@ def generate_image(request):
         # Extract image generation prompt and style from JSON
         processed_prompt = ad_info.get('ad_description', f"{user_text}, high quality, detailed")
         target_style = ad_info.get('style', 'default')
+        ad_copy = ad_info.get('ad_copy', '')
+        text_layout = ad_info.get('text_layout', None)
         
-        # Generate image using diffusion model
-        image, image_url = diffusion_service.generate_image_from_prompt(processed_prompt)
+        # Generate image using diffusion model with text overlay
+        image, image_url = diffusion_service.generate_image_from_prompt(
+            processed_prompt,
+            ad_copy=ad_copy,
+            text_layout=text_layout
+        )
         
         # Save record to database (including original request and generated JSON)
         generation_record = ImageGeneration.objects.create(

@@ -5,6 +5,7 @@ from PIL import Image
 import io
 import random
 import os
+from typing import Dict, Optional
 from django.conf import settings
 
 
@@ -96,18 +97,36 @@ class DiffusionService:
         # Return path relative to MEDIA_URL
         return os.path.join(settings.MEDIA_URL, filename)
     
-    def generate_image_from_prompt(self, prompt: str) -> tuple[Image.Image, str]:
+    def generate_image_from_prompt(
+        self,
+        prompt: str,
+        ad_copy: Optional[str] = None,
+        text_layout: Optional[Dict] = None
+    ) -> tuple[Image.Image, str]:
         """
-        Generate image from prompt and save
+        Generate image from prompt, optionally add text overlay
         
         Args:
             prompt: Image generation prompt
+            ad_copy: Advertising copy text to overlay on image
+            text_layout: Text layout specification (x, y, width, height, alignment, color)
             
         Returns:
             Tuple of (image object, saved path)
         """
-        # Generate image
+        # Generate base image
         image = self.generate_image(prompt)
+        
+        # Add text overlay if provided
+        if ad_copy and text_layout:
+            from .text_overlay_service import TextOverlayService
+            text_service = TextOverlayService()
+            try:
+                image = text_service.add_text_overlay(image, ad_copy, text_layout)
+                print(f"✓ Text overlay added: '{ad_copy[:50]}...' at position ({text_layout.get('x', 0):.2f}, {text_layout.get('y', 0):.2f})")
+            except Exception as e:
+                print(f"⚠ Warning: Failed to add text overlay: {e}")
+                # Continue with image without text overlay
         
         # Generate filename
         import hashlib
