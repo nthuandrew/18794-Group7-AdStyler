@@ -151,12 +151,12 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
     BASE_MODEL_ID = "runwayml/stable-diffusion-v1-5"
     
     # 1. Style Components Paths
-    STYLE_ENCODER_PATH = "style_encoder.pth"
-    STYLE_TOKENIZER_PATH = "style_tokenizer.pth"
+    STYLE_ENCODER_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_encoder.pth"
+    STYLE_TOKENIZER_PATH = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/style_tokenizer.pth"
     
     # 2. Ad Components Paths (CLIP Version)
     # *** Update this to your CLIP training output folder ***
-    AD_CHECKPOINT_DIR = "ad_lora_clip_output/checkpoint-epoch-10" 
+    AD_CHECKPOINT_DIR = "/cluster/home/andrewchen/andrewchen/18794/Final/adstyler_src/ad_lora_clip_output/checkpoint-epoch-20" 
     UNET_LORA_PATH = os.path.join(AD_CHECKPOINT_DIR, "unet_lora")
     META_PROJECTOR_PATH = os.path.join(AD_CHECKPOINT_DIR, "meta_projector.pth")
 
