@@ -1,0 +1,52 @@
+{
+    "Traditional culture 1": {
+        "style_id": "s0284",
+        "image_path": "style30k/images_top10/s0284____0907_01_query_0_img_000003_1684041711045_05167266301807886.jpeg.jpg",
+        "similarity_to_centroid": 0.9986209273338318
+    },
+    "Impressionism": {
+        "style_id": "s0370",
+        "image_path": "style30k/images_top10/s0370____0907_01_query_1_img_000168_1683009215742_018968722535351745.jpg.jpg",
+        "similarity_to_centroid": 0.9995257258415222
+    },
+    "hand drawn style": {
+        "style_id": "s0583",
+        "image_path": "style30k/images_top10/s0583____0907_01_query_2_img_000150_1683270348206_06911460325342597.png.jpg",
+        "similarity_to_centroid": 0.9982746839523315
+    },
+    "Game scene picture 2": {
+        "style_id": "s0778",
+        "image_path": "style30k/images_top10/s0778____0907_01_query_1_img_000158_1683343883537_02958512323525546.jpeg.jpg",
+        "similarity_to_centroid": 0.9992841482162476
+    },
+    "graphic portrait style": {
+        "style_id": "s0437",
+        "image_path": "style30k/images_top10/s0437____0908_01_query_1_img_000099_1683226616785_005150353172183686.jpeg.jpg",
+        "similarity_to_centroid": 0.996992826461792
+    },
+    "Op style": {
+        "style_id": "s0692",
+        "image_path": "style30k/images_top10/s0692____0908_01_query_1_img_000046_1682924953303_020991030709030545.jpg.jpg",
+        "similarity_to_centroid": 0.9995537400245667
+    },
+    "Traditional Chinese ink painting style 2": {
+        "style_id": "s0283",
+        "image_path": "style30k/images_top10/s0283____0908_01_query_1_img_000078_1683778185995_08858179244511257.jpeg.jpg",
+        "similarity_to_centroid": 0.9994769096374512
+    },
+    "National characteristic art 1": {
+        "style_id": "s0697",
+        "image_path": "style30k/images_top10/s0697____0908_01_query_1_img_000034_1684041717207_008712559432429634.jpeg.jpg",
+        "similarity_to_centroid": 0.9986217617988586
+    },
+    "Architectural sketch 1": {
+        "style_id": "s0546",
+        "image_path": "style30k/images_top10/s0546____0908_01_query_0_img_000121_1683488307331_03275159339873426.jpeg.jpg",
+        "similarity_to_centroid": 0.9976279139518738
+    },
+    "Pulp noir style": {
+        "style_id": "s0288",
+        "image_path": "style30k/images_top10/s0288____0907_01_query_2_img_000073_1683402548590_049800394829157035.jpeg.jpg",
+        "similarity_to_centroid": 0.9974077939987183
+    }
+}

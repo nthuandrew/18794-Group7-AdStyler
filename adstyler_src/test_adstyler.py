@@ -13,6 +13,8 @@ from peft import PeftModel
 
 # Custom Modules (From your files)
 from infer import StableDiffusionPipelineWithStyle, StyleTokenizer, load_style_encoder
+import random
+import json
 
 # --- 1. Define Helper Classes ---
 
@@ -110,16 +112,39 @@ class AdStylerCLIPWrapper(nn.Module):
         final_output = torch.cat([style_part, text_embeds, meta_embeds], dim=1)
         
         return [final_output]
+def get_ref_image_path_smart(style_name):
+    STYLE_REPRESENTATIVES_PATH = "style_representatives.json"
 
-def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 0.1, 0.8, 0.2], style_image_path="style30k/images_top10/s0546____0908_01_query_1_img_000098_1682331370726_08680369659788782.jpeg.jpg", output_image_path="output_adstyler.png"):
+    # Load the map once
+    if os.path.exists(STYLE_REPRESENTATIVES_PATH):
+        with open(STYLE_REPRESENTATIVES_PATH, 'r', encoding='utf-8') as f:
+            style_lookup = json.load(f)
+    else:
+        print(f"Warning: {STYLE_REPRESENTATIVES_PATH} not found. Style lookup will fail.")
+        style_lookup = {}
+    
+    if style_name in style_lookup:
+        return style_lookup[style_name]["image_path"]
+    
+
+    for existing_style in style_lookup.keys():
+        if style_name.lower() in existing_style.lower() or existing_style.lower() in style_name.lower():
+            print(f"Style '{style_name}' not found, but matched with '{existing_style}'.")
+            return style_lookup[existing_style]["image_path"]
+
+    available_styles = list(style_lookup.keys())
+    random_style = random.choice(available_styles)
+    print(f"Warning: Style '{style_name}' not found. Using random style '{random_style}'.")
+    return style_lookup[random_style]["image_path"]
+
+def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 0.1, 0.8, 0.2], style="Impressionism", output_image_path="output_adstyler.png"):
     # --- Configuration ---
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {DEVICE}")
-    
     # Inputs
     AD_COPY = ad_copy
     LAYOUT = layout 
-    STYLE_IMAGE_PATH = style_image_path
+    STYLE_IMAGE_PATH = get_ref_image_path_smart(style)
     OUTPUT_IMAGE = output_image_path
 
     # Base Models
@@ -242,15 +267,16 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
     print(f"Result saved to {OUTPUT_IMAGE}")
 
 if __name__ == "__main__":
+    Style_list = ["Traditional culture 1", "Impressionism", "hand drawn style", "Game scene picture 2", "graphic portrait style", "Op style", "Traditional Chinese ink painting style 2", "National characteristic art 1", "Architectural sketch 1", "Pulp noir style"]
     AD_COPY = "A smartphone is on sale now!"
     METADATA = [0.1, 0.1, 0.8, 0.2] 
-    STYLE_IMAGE_PATH = "style30k/images_top10/s0546____0908_01_query_1_img_000098_1682331370726_08680369659788782.jpeg.jpg"
+    STYLE = "Impressionism" 
 
     OUTPUT_IMAGE = "output_adstyler.png"
 
     run_adstyler_inference(
         ad_copy=AD_COPY, 
         layout=METADATA, 
-        style_image_path=STYLE_IMAGE_PATH, 
+        style=STYLE, 
         output_image_path=OUTPUT_IMAGE
     )
