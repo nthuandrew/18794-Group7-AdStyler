@@ -1,6 +1,11 @@
-*
-!/.gitignore
-!/adstyler_src/
-!/adstyler_src/*.py
-!/demo-ui/*
-!/layout-llm-finetuning/*
+adstyler_src/AdImageNet/
+adstyler_src/style30k/
+adstyler_src/ad_lora_clip_output/
+*.png
+*.pth
+baselines/
+cassie_baseline/
+venv18794/
+.vscode/
+__pycache__/
+*.ipynb
