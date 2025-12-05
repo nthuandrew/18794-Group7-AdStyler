@@ -269,7 +269,7 @@ def run_adstyler_inference(ad_copy="A smartphone is on sale now!", layout=[0.1, 
 if __name__ == "__main__":
     Style_list = ["Traditional culture 1", "Impressionism", "hand drawn style", "Game scene picture 2", "graphic portrait style", "Op style", "Traditional Chinese ink painting style 2", "National characteristic art 1", "Architectural sketch 1", "Pulp noir style"]
     AD_COPY = "An headphone is 50 percent off today!"
-    METADATA = [0.1, 0.1, 0.8, 0.2] 
+    METADATA = [0.1, 0.1, 0.8, 0.2] # x, y, width, height
     STYLE = "Architectural sketch 1" 
 
     OUTPUT_IMAGE = "output_adstyler.png"
